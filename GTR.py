@@ -2,6 +2,7 @@ from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, 
 from sqlalchemy.orm import sessionmaker
 from neo4j import GraphDatabase
 import pandas as pd
+import os
 
 def configurer_sqlalchemy(uri_base_donnees):
     moteur = create_engine(uri_base_donnees)
@@ -97,17 +98,20 @@ def inserer_donnees(moteur, tables, donnees):
                 df = pd.DataFrame(lignes)
                 df.to_sql(table, moteur, if_exists='append', index=False)
 
-def clear_database(session, metadata):
-    for table in reversed(metadata.sorted_tables):
-        session.execute(table.delete())
-    session.commit()
+
 
 def transformer_graphe_en_relationnel(uri_base_donnees, uri_neo4j, utilisateur_neo4j, mot_de_passe_neo4j):
+
+    # Supprimer la base de données SQLite si elle existe
+    db_path = "Sortie.db"
+    if os.path.exists(db_path):
+        os.remove(db_path)
+        print(f"{db_path} supprimé.")
+
     moteur, metadonnees = configurer_sqlalchemy(uri_base_donnees)
-    Session = sessionmaker(bind=moteur)
-    session = Session()
+
+
     
-    clear_database(session, metadonnees)
 
     driver = configurer_neo4j(uri_neo4j, utilisateur_neo4j, mot_de_passe_neo4j)
     
