@@ -1,0 +1,5 @@
+# Ignorer les fichiers de base de données
+*.db
+
+# Ignorer le dossier d'environnement virtuel
+TERenv/
