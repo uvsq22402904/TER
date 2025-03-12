@@ -32,7 +32,8 @@ def recuperer_noeuds(driver):
                 # Récupérer les types si disponibles
                 exemple_ligne = lignes[0]
                 if "_types" in exemple_ligne:
-                    types_colonnes[table] = exemple_ligne["_types"]
+                    types_colonnes[table] = {entry.split(":")[0]: entry.split(":")[1] for entry in exemple_ligne["_types"]}
+
                     for ligne in lignes:
                         ligne.pop("_types", None)  # Supprimer _types des données
 

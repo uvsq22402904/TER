@@ -59,7 +59,7 @@ def inserer_noeuds(driver, metadonnees, moteur):
             
             for _, ligne in df.iterrows():
                 proprietes = ligne.to_dict()
-                proprietes["_types"] = types_colonnes  # Ajouter les types comme propriété du nœud
+                proprietes["_types"] = [f"{k}:{v}" for k, v in types_colonnes.items()]
                 session.write_transaction(creer_noeud, nom_table, proprietes)
 
 
