@@ -12,3 +12,5 @@ from helper.relations_extractor import db_relations
 def neo(uri: str):
     all_relations = db_relations(uri)
     print(all_relations)
+    
+ 

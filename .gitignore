@@ -1,6 +1,63 @@
-# Ignorer les fichiers de base de données
-*.db
-
-# Ignorer le dossier d'environnement virtuel
+# Environnements virtuels
+venv/
+env/
 TERenv/
 ter/
+*.venv
+*.env
+
+# Fichiers compilés Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Fichiers de logs
+logs/
+*.log
+*.out
+*.err
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Configurations d'éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Dépendances locales
+Pipfile
+Pipfile.lock
+poetry.lock
+
+# Caches
+.cache/
+*.pyc
+*.pyo
+.mypy_cache/
+.tox/
+.dist/
+.build/
+.coverage
+.pytest_cache/
+
+# Base de données SQLite locale
+*.sqlite3
+*.db
+
+# Clés et fichiers sensibles
+.env
+*.key
+*.pem
+*.crt
+
+# Export de notebooks
+*.nbconvert.ipynb
+
+# Fichiers temporaires générés
+.DS_Store
+Thumbs.db
+
+# Artifacts de build (wheel, egg, etc.)
+*.egg-info/

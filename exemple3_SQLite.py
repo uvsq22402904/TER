@@ -29,7 +29,7 @@ class Employe(Base):
     service = relationship('Service', back_populates='employes')
 
 # Création de la base de données SQLite
-engine = create_engine('sqlite:///example.db')
+engine = create_engine('sqlite:///data/example.db')
 Base.metadata.create_all(engine)
 
 # Création de la session
