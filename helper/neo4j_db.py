@@ -1,7 +1,9 @@
-from typing import Any
-from neo4j import Driver, GraphDatabase, ManagedTransaction
+from typing import Any, Dict
+from neo4j import Driver, GraphDatabase, ManagedTransaction,Session
 from neo4j.exceptions import Neo4jError
 from enviroment import URI_HOST_NEO4J,URI_PORT_NEO4J,USERNAME_NEO4J,PASSWORD_NEO4J
+from helper.db import get_all
+import pandas as pd
 
 
 def is_noeud_exist(transacManager: ManagedTransaction, etiquette1: str, prop1: dict) -> bool:
@@ -148,3 +150,48 @@ def erase_neo_db(driver: Driver) -> None:
             session.execute_write(lambda tx: tx.run("MATCH (n) DETACH DELETE n"))
     except Neo4jError as e:
         print(f"Erreur lors du nettoyage de la base Neo4j : {e}")
+        
+        
+
+def insert_noeud_from_table(table_name: str, table_struct, neo_session: Session, db_engine: Driver) -> bool:
+    """
+    Insère les données d'une table SQL dans Neo4j sous forme de nœuds.
+
+    Args:
+        table_name (str): Nom de la table SQL.
+        table_struct (Table): Structure SQLAlchemy de la table (pour les types).
+        neo_session (Session): Session active Neo4j.
+        db_engine (Engine): Moteur de base de données SQL.
+
+    Returns:
+        bool: True si l'import a réussi, False sinon.
+    """
+    try:
+        print(f"[INFO] Lecture des données de la table : {table_name}")
+        table_datas: pd.DataFrame = get_all(db_engine, table_name)
+
+        if table_datas.empty:
+            print(f"[INFO] Aucune donnée à migrer depuis {table_name}.")
+            return True
+
+        # Récupération des types de colonnes depuis SQLAlchemy
+        table_colums_type: Dict[str, str] = {
+            col.name: str(col.type) for col in table_struct.columns
+        }
+
+        print(f"[INFO] Début de la migration vers Neo4j : {len(table_datas)} lignes à insérer...")
+
+        for _, row in table_datas.iterrows():
+            properties = row.to_dict()
+            # Ajouter les types de colonnes comme méta-infos (facultatif)
+            properties["_types"] = [f"{k}:{v}" for k, v in table_colums_type.items()]
+            
+            # Écriture transactionnelle dans Neo4j
+            neo_session.execute_write(create_noeud, table_name, properties)
+
+        print(f"[SUCCESS] Migration terminée pour la table {table_name}.")
+        return True
+
+    except Exception as e:
+        print(f"[ERROR] Échec de l'import depuis {table_name} : {e}")
+        return False

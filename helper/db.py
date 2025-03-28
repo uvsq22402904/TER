@@ -1,6 +1,6 @@
 from sqlalchemy import MetaData, create_engine, Engine
 from enviroment import DATABASE_TYPE
-from .sqlite_db import sqliteIsJoinTable,sqliteSchema,sqlite_connector,sqliteGetRelationsMatrice
+from .sqlite_db import sqliteIsJoinTable,sqliteSchema,sqlite_connector,sqliteGetRelationsMatrice,sqlite_get_all
 
 
 # core
@@ -65,6 +65,14 @@ def getRelationsMatrice(table: str, db_engine: Engine):
     match DATABASE_TYPE:
         case 'sqlite':
             return sqliteGetRelationsMatrice(table, db_engine)
+        case _:
+            # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
+            raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")
+        
+def get_all(db_engine: Engine, table: str):
+    match DATABASE_TYPE:
+        case 'sqlite':
+            return sqlite_get_all(table, db_engine)
         case _:
             # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
             raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")

@@ -1,6 +1,7 @@
 import pandas as pd
 from typing import Dict
 from sqlalchemy import Table, Engine
+from sqlalchemy.exc import SQLAlchemyError
 
 # sqlite
 def sqliteIsJoinTable(table: str, db_engine: Engine):
@@ -75,3 +76,10 @@ def sqliteGetRelationsMatrice(tables: Dict[str, Table], db_engine: Engine) -> pd
             print(f"Erreur dans la détection de table d'association pour {src_name}: {e}")
 
     return matrix
+
+def sqlite_get_all(table: str, db_engine: Engine):
+    try:
+        return pd.read_sql_query(f"SELECT * FROM {table}", db_engine)
+    except SQLAlchemyError as e:
+        print(f"Erreur lors de la récupération des données de {table} : {e}")
+        return pd.DataFrame()
