@@ -19,7 +19,7 @@ def get_table_structure(db_path, table_name):
     conn.close()
     return structure
 
-def load_table_data(db_path, table_name):
+def load_table_data(db_path, table_name):   
     """ Charge les données d'une table sous forme de DataFrame """
     conn = sqlite3.connect(db_path)
     df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)

@@ -1,10 +1,11 @@
-from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String, ForeignKey
+from sqlalchemy import PrimaryKeyConstraint, create_engine, MetaData, Table, Column, Integer, String, ForeignKey
 from sqlalchemy import Integer, BigInteger, SmallInteger, Float, Numeric, Boolean
 from sqlalchemy import String, Date, DateTime, LargeBinary
 from sqlalchemy.orm import sessionmaker
 from neo4j import GraphDatabase
 import pandas as pd
 import os
+from sqlalchemy import Date  # Import du type Date
 
 def configurer_sqlalchemy(uri_base_donnees):
     moteur = create_engine(uri_base_donnees)
@@ -58,7 +59,7 @@ def recuperer_relations(driver):
                  record["table_cible"], record["prop_cible"],
                  record["relation"]) for record in result]
 
-from sqlalchemy import Date  # Import du type Date
+
 
 def convertir_type(sql_type):
     """Convertit un type SQL en SQLAlchemy"""
@@ -92,33 +93,68 @@ def convertir_type(sql_type):
 def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
     tables = {}
 
-    # Création des tables (sans FK)
+    # 1. Création des tables de base avec leurs colonnes
     for table, lignes in donnees.items():
-        colonnes = [Column("id", Integer, primary_key=True)]
-        
+        colonnes = []
+        is_association_table = table.endswith("_association")
+
+        if not is_association_table:
+            print(f"Table {table} n'est pas une table d'association. Ajout de la colonne 'id'.")
+            if table not in types_colonnes or 'id' not in types_colonnes[table]:
+                colonnes.append(Column("id", Integer, primary_key=True))
+        else:
+            print(f"Table {table} est une table d'association many-to-many. Pas de colonne 'id' ajoutée.")
+
         if lignes and table in types_colonnes:
             for cle, type_sql in types_colonnes[table].items():
-                if cle != "id":
+                if cle == 'id' and not is_association_table:
+                    colonnes.append(Column(cle, convertir_type(type_sql), primary_key=True))
+                elif cle != 'id':
                     colonnes.append(Column(cle, convertir_type(type_sql)))
 
         tables[table] = Table(table, metadonnees, *colonnes)
 
-    # Ajout des FK en évitant les doublons
+    # 2. Création des tables d'association from relations
+    tables_dassociation = {}
     for table_source, prop_source, table_cible, prop_cible, relation in relations:
-        if "id" in prop_source and "id" in prop_cible:
-            if table_source in tables and table_cible in tables:
-                # Liste des colonnes déjà présentes
-                existing_columns = [col.name for col in tables[table_source].columns]
+        if table_source not in tables or table_cible not in tables:
+            continue
 
-                # Vérifier si une colonne FK existe déjà sous une autre forme (ex: owner_id)
-                possible_fk_names = [f"{table_cible}_id", f"owner_id", f"house_id", f"fk_{table_cible}"]
-                if not any(fk in existing_columns for fk in possible_fk_names):
-                    fk_col_name = f"fk_{table_cible}"
-                    fk_col = Column(fk_col_name, Integer, ForeignKey(f"{table_cible}.id"))
-                    tables[table_source].append_column(fk_col)
+        if relation == "many-to-many" or table_source.endswith("_association") or table_cible.endswith("_association"):
+            nom_table_association = f"{table_source}_{table_cible}"
+            if nom_table_association not in tables_dassociation and nom_table_association not in tables:
+                tables_dassociation[nom_table_association] = Table(
+                    nom_table_association, metadonnees,
+                    Column(f"{table_source}_id", Integer, ForeignKey(f"{table_source}.id"), primary_key=True),
+                    Column(f"{table_cible}_id", Integer, ForeignKey(f"{table_cible}.id"), primary_key=True),
+                    PrimaryKeyConstraint(f"{table_source}_id", f"{table_cible}_id")
+                )
+                print(f"Table d'association pour {table_source} et {table_cible} créée sous le nom {nom_table_association}.")
 
-    metadonnees.create_all(moteur)  # Création des tables en base
+    # 3. Renommage des tables *_association
+    tables_renamed = {}
+    for name, table in list(tables.items()):
+        if name.endswith('_association'):
+            new_name = name.removesuffix('_association')
+            table.name = new_name
+            tables_renamed[new_name] = table
+        else:
+            tables_renamed[name] = table
+
+    tables = tables_renamed
+
+    # 4. Création effective des tables (seulement maintenant)
+    metadonnees.create_all(moteur)
+
+    # 5. Création des tables d'association many-to-many
+    for table_association in tables_dassociation.values():
+        if table_association.name not in tables:
+            table_association.create(moteur)
+
     return tables
+
+
+
 
 
 
