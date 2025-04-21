@@ -160,11 +160,19 @@ def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
 
 
 def inserer_donnees(moteur, tables, donnees):
+    # Créer un mapping des noms de tables (pour les tables avec "_association")
+    mapping_noms = {}
+    for table_name in donnees.keys():
+        if table_name.endswith("_association"):
+            mapping_noms[table_name] = table_name[:-12]  # Enlève "_association"
+    
     with moteur.connect() as connexion:
         for table, lignes in donnees.items():
             if lignes:
+                # Utiliser le nom sans suffixe pour l'insertion
+                nom_table = mapping_noms.get(table, table)
                 df = pd.DataFrame(lignes)
-                df.to_sql(table, moteur, if_exists='append', index=False)
+                df.to_sql(nom_table, moteur, if_exists='append', index=False)
 
 
 
