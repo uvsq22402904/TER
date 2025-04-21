@@ -19,9 +19,10 @@ def configurer_neo4j(uri_neo4j, utilisateur_neo4j, mot_de_passe_neo4j):
 def recuperer_noeuds(driver):
     with driver.session() as session:
         requete = """
-        MATCH (n) 
-        RETURN DISTINCT labels(n)[0] AS table, 
-                        collect(properties(n)) AS donnees
+        MATCH (n)
+        UNWIND labels(n) AS etiquette
+        RETURN etiquette AS table, 
+               collect({nodeId: id(n), properties: properties(n)}) AS donnees
         """
         result = session.run(requete)
 
@@ -30,21 +31,29 @@ def recuperer_noeuds(driver):
 
         for record in result:
             table = record["table"]
-            lignes = record["donnees"]
-
-            if lignes:
-                # Récupérer les types si disponibles
-                exemple_ligne = lignes[0]
-                if "_types" in exemple_ligne:
-                    types_colonnes[table] = {entry.split(":")[0]: entry.split(":")[1] for entry in exemple_ligne["_types"]}
-
-                    for ligne in lignes:
-                        ligne.pop("_types", None)  # Supprimer _types des données
-
-            donnees[table] = lignes
+            nodes_data = record["donnees"]
+            
+            # Transformer les données pour cette étiquette
+            processed_data = []
+            for node in nodes_data:
+                # Fusionner nodeId et propriétés
+                node_props = node["properties"].copy()
+                node_props["neo4j_id"] = node["nodeId"]  # Conserver l'ID Neo4j pour les références
+                
+                # Gérer les types
+                if "_types" in node_props:
+                    if table not in types_colonnes:
+                        types_colonnes[table] = {
+                            entry.split(":")[0]: entry.split(":")[1] 
+                            for entry in node_props["_types"]
+                        }
+                    node_props.pop("_types", None)
+                
+                processed_data.append(node_props)
+            
+            donnees[table] = processed_data
 
         return donnees, types_colonnes
-
 
 def recuperer_relations(driver):
     with driver.session() as session:
@@ -167,18 +176,18 @@ def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
     return tables
 
 
-
-
-
-
-
 def inserer_donnees(moteur, tables, donnees):
     with moteur.connect() as connexion:
         for table, lignes in donnees.items():
             if lignes:
                 df = pd.DataFrame(lignes)
-                if 'est_association' in df.columns:
-                    df = df.drop('est_association', axis=1)
+                
+                # Supprimer les colonnes problématiques
+                columns_to_drop = ['est_association', 'neo4j_id']
+                for col in columns_to_drop:
+                    if col in df.columns:
+                        df = df.drop(col, axis=1)
+                        
                 df.to_sql(table, moteur, if_exists='append', index=False)
 
 
