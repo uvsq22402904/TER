@@ -89,6 +89,17 @@ def convertir_type(sql_type):
         print(f"⚠ Type SQL non reconnu : {sql_type} → String utilisé par défaut.")
         return String  # Sécurité : utilise String si inconnu
 
+def is_table_association(table_name, donnees):
+    """Vérifie si une table est marquée comme association dans ses données."""
+    lignes = donnees.get(table_name)
+    #print(lignes)
+    # On regarde la première ligne de données pour cette table (si elle existe)
+    if lignes:
+        first_line = lignes[0]
+        #print(first_line)
+        if 'est_association' in first_line and first_line['est_association'] is True:
+            return True
+    return False
 
 def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
     tables = {}
@@ -96,7 +107,9 @@ def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
     # 1. Création des tables de base avec leurs colonnes
     for table, lignes in donnees.items():
         colonnes = []
-        is_association_table = table.endswith("_association")
+        is_association_table = is_table_association(table , donnees)
+        #print(is_association_table)
+        #print(donnees.get(table))
 
         if not is_association_table:
             print(f"Table {table} n'est pas une table d'association. Ajout de la colonne 'id'.")
@@ -160,19 +173,13 @@ def creer_tables(moteur, metadonnees, donnees, relations, types_colonnes):
 
 
 def inserer_donnees(moteur, tables, donnees):
-    # Créer un mapping des noms de tables (pour les tables avec "_association")
-    mapping_noms = {}
-    for table_name in donnees.keys():
-        if table_name.endswith("_association"):
-            mapping_noms[table_name] = table_name[:-12]  # Enlève "_association"
-    
     with moteur.connect() as connexion:
         for table, lignes in donnees.items():
             if lignes:
-                # Utiliser le nom sans suffixe pour l'insertion
-                nom_table = mapping_noms.get(table, table)
                 df = pd.DataFrame(lignes)
-                df.to_sql(nom_table, moteur, if_exists='append', index=False)
+                if 'est_association' in df.columns:
+                    df = df.drop('est_association', axis=1)
+                df.to_sql(table, moteur, if_exists='append', index=False)
 
 
 

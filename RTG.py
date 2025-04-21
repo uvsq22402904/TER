@@ -50,20 +50,17 @@ def est_table_jointure(table):
 
 def creer_noeud(tx, etiquette, proprietes, table):
     try:
-        # Avant de créer un nœud, vérifie si c'est une table de jointure
+        props_pour_requete = proprietes.copy()
         if est_table_jointure(table):
-            # Ajouter '_association' au nom de la table de jointure
-            etiquette_association = f"{etiquette}_association"
-            print(f"{etiquette} est une table de jointure. Renommage en {etiquette_association}.")
-            # Créer le nœud avec le nouveau nom
-            requete = f"CREATE (n:{etiquette_association} $props)"
-            tx.run(requete, props=proprietes)
-        else:
-            # Si ce n'est pas une table de jointure, créer le nœud avec le nom original
-            requete = f"CREATE (n:{etiquette} $props)"
-            tx.run(requete, props=proprietes)
+            # Ajoute la propriété booléenne
+            props_pour_requete['est_association'] = True
+            print(f"'{table}' (étiquette '{etiquette}') est une table de jointure. Ajout de la propriété 'est_association=True'.")
+        requete = f"CREATE (n:{etiquette} $props)"
+        tx.run(requete, props=props_pour_requete)
     except neo4j_exceptions.Neo4jError as e:
-        print(f"Erreur lors de la création d'un nœud {etiquette} : {e}")
+        print(f"Erreur Neo4j lors de la création du nœud '{etiquette}' depuis la table '{table}' : {e}")
+    except Exception as e:
+        print(f"Erreur inattendue lors de la préparation/création du nœud '{etiquette}' depuis la table '{table}' : {e}")
 
 
 
