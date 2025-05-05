@@ -1,9 +1,10 @@
 from typing import Any, Dict
 from neo4j import Driver, GraphDatabase, ManagedTransaction,Session
 from neo4j.exceptions import Neo4jError
-from enviroment import URI_HOST_NEO4J,URI_PORT_NEO4J,USERNAME_NEO4J,PASSWORD_NEO4J
+from enviroment import URI_HOST_NEO4J,URI_PORT_NEO4J,USERNAME_NEO4J,PASSWORD_NEO4J,URI_AGENT_NEO4J
 from helper.db import get_all
 import pandas as pd
+import json
 
 
 def is_noeud_exist(transacManager: ManagedTransaction, etiquette1: str, prop1: dict) -> bool:
@@ -104,21 +105,21 @@ def add_link(transacManager: ManagedTransaction, etiquette1: str, prop1: dict, e
         key1, val1 = next(iter(prop1.items()))
         key2, val2 = next(iter(prop2.items()))
 
-        # Construction de la clause SET pour les propriétés de la relation
-        props_str = ''
-        if linkProperties:
-            props_assignments = [f"{k}: ${k}" for k in linkProperties]
-            props_str = ' {' + ', '.join(props_assignments) + '}'
-        else:
-            linkProperties = {}
-
         query = (
             f"MATCH (a:{etiquette1}), (b:{etiquette2}) "
             f"WHERE a.{key1} = $val1 AND b.{key2} = $val2 "
-            f"CREATE (a)-[r:{link}{props_str}]->(b)"
+            f"MERGE (a)-[r:{link}]->(b) "
         )
 
-        transacManager.run(query, val1=val1, val2=val2, **linkProperties)
+        params = {"val1": val1, "val2": val2}
+
+        # Ajout dynamique des propriétés de la relation
+        if linkProperties is not None:
+            set_clauses = [f"r.{k} = ${k}" for k in linkProperties.keys()]
+            query += "SET " + ", ".join(set_clauses)
+            params.update(linkProperties)
+
+        transacManager.run(query, **params)
 
     except Neo4jError as e:
         print(f"Erreur lors de la création d'une relation {link} : {e}")
@@ -131,7 +132,7 @@ def load_neo() -> Driver:
         Driver: instance de connexion Neo4j.
     """
     try:
-        uri_neo4j = f"bolt://{URI_HOST_NEO4J}:{URI_PORT_NEO4J}"
+        uri_neo4j = f"{URI_AGENT_NEO4J}://{URI_HOST_NEO4J}:{URI_PORT_NEO4J}"
         driver = GraphDatabase.driver(uri_neo4j, auth=(USERNAME_NEO4J, PASSWORD_NEO4J))
         return driver
     except Neo4jError as e:
@@ -151,8 +152,6 @@ def erase_neo_db(driver: Driver) -> None:
     except Neo4jError as e:
         print(f"Erreur lors du nettoyage de la base Neo4j : {e}")
         
-        
-
 def insert_noeud_from_table(table_name: str, table_struct, neo_session: Session, db_engine: Driver) -> bool:
     """
     Insère les données d'une table SQL dans Neo4j sous forme de nœuds.

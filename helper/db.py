@@ -1,6 +1,7 @@
 from sqlalchemy import MetaData, create_engine, Engine
 from enviroment import DATABASE_TYPE
-from .sqlite_db import sqliteIsJoinTable,sqliteSchema,sqlite_connector,sqliteGetRelationsMatrice,sqlite_get_all
+from .postgrey_db import postgreSchema
+from .sqlite_db import sqliteIsJoinTable, sqliteSchema, sqlite_connector, sqliteGetRelationsMatrice, sqlite_get_all,sqlite_get_all_relations,sqlite_single_table_relations
 
 
 # core
@@ -73,6 +74,22 @@ def get_all(db_engine: Engine, table: str):
     match DATABASE_TYPE:
         case 'sqlite':
             return sqlite_get_all(table, db_engine)
+        case _:
+            # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
+            raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")
+        
+def get_all_relations(db_engine: Engine, table1: str, table2: str):
+    match DATABASE_TYPE:
+        case 'sqlite':
+            return sqlite_get_all_relations(table1, table2, db_engine)
+        case _:
+            # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
+            raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")
+        
+def get_single_table_relations(db_engine: Engine, table: str):
+    match DATABASE_TYPE:
+        case 'sqlite':
+            return sqlite_single_table_relations(table, db_engine)
         case _:
             # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
             raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")

@@ -27,9 +27,9 @@ def db_relations(uri: str):
         matrixWithoutRelationTable = relationMatrix.drop(index = to_drops, columns=to_drops)
         
         print("Association table : ")
-        drawLineInConsole(isAssociationTables)
+        # drawLineInConsole(isAssociationTables)
         print("Relation matrix without association table : ")
-        drawLineInConsole(matrixWithoutRelationTable)
+        # drawLineInConsole(matrixWithoutRelationTable)
 
         return matrixWithoutRelationTable
     except Exception as e:

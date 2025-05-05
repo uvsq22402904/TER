@@ -83,3 +83,19 @@ def sqlite_get_all(table: str, db_engine: Engine):
     except SQLAlchemyError as e:
         print(f"Erreur lors de la récupération des données de {table} : {e}")
         return pd.DataFrame()
+
+def sqlite_get_all_relations(table1: str, table2: str, db_engine: Engine):
+    try:
+        df = sqlite_single_table_relations(table1, db_engine)
+        df = df[df['table'] == table2]
+        return pd.DataFrame(df)
+    except SQLAlchemyError as e:
+        print(f"Erreur lors de la récupération des données de {table1} - {table2} : {e}")
+        return pd.DataFrame()
+    
+def sqlite_single_table_relations(table1: str,  db_engine: Engine):
+    try:
+        return pd.read_sql_query(f"PRAGMA foreign_key_list('{table1}')", db_engine)
+    except SQLAlchemyError as e:
+        print(f"Erreur lors de la récupération des données de {table1}: {e}")
+        return pd.DataFrame()
