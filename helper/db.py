@@ -1,7 +1,9 @@
 from sqlalchemy import MetaData, create_engine, Engine
 from enviroment import DATABASE_TYPE
 from .postgrey_db import postgreSchema
-from .sqlite_db import sqliteIsJoinTable, sqliteSchema, sqlite_connector, sqliteGetRelationsMatrice, sqlite_get_all,sqlite_get_all_relations,sqlite_single_table_relations
+from .sqlite_db import (sqliteIsJoinTable, sqliteSchema, sqlite_connector, 
+                        sqliteGetRelationsMatrice, sqlite_get_all,sqlite_get_all_relations,
+                        sqlite_single_table_relations, create_sqlite_table, sqlite_bulk_insert_data)
 
 
 # core
@@ -90,6 +92,24 @@ def get_single_table_relations(db_engine: Engine, table: str):
     match DATABASE_TYPE:
         case 'sqlite':
             return sqlite_single_table_relations(table, db_engine)
+        case _:
+            # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
+            raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")
+        
+        
+def create_table(table: str, fields: dict, db_engine: Engine):
+    match DATABASE_TYPE:
+        case 'sqlite':
+            return create_sqlite_table(db_engine, table, fields)
+        case _:
+            # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
+            raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")
+        
+        
+def bulk_insert_data(db_engine: Engine, table: str, datas: list, type_dict: dict):
+    match DATABASE_TYPE:
+        case 'sqlite':
+            return sqlite_bulk_insert_data(db_engine, table, datas, type_dict)
         case _:
             # Gestion d'une erreur si le moteur de base de données n'est pas reconnu
             raise ValueError(f"engineMotor {DATABASE_TYPE} does not exist !")

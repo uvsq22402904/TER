@@ -1,7 +1,8 @@
 import pandas as pd
 from typing import Dict
-from sqlalchemy import Table, Engine
+from sqlalchemy import Table, Column, Engine, MetaData
 from sqlalchemy.exc import SQLAlchemyError
+from .utils import convertir_type,cast_value
 
 # sqlite
 def sqliteIsJoinTable(table: str, db_engine: Engine):
@@ -99,3 +100,50 @@ def sqlite_single_table_relations(table1: str,  db_engine: Engine):
     except SQLAlchemyError as e:
         print(f"Erreur lors de la récupération des données de {table1}: {e}")
         return pd.DataFrame()
+    
+def create_sqlite_table(db_engine: Engine, table: str, fields: dict):
+    try:
+        metadata = MetaData()
+        columns  = []
+        
+        for field_name,field_type in fields.items():
+            columns.append(Column(field_name, convertir_type(field_type)))
+            
+        tab = Table(table, metadata, *columns)
+        
+        metadata.create_all(db_engine)
+                    
+        return True
+    except SQLAlchemyError as e:
+        print(f"[ERREUR] Erreur lors de la creation de la table {table} : {e}")
+        return False
+    
+
+def cast_row(row: dict, type_map: dict) -> dict:
+    return {k: cast_value(v, type_map.get(k, "VARCHAR")) for k, v in row.items()}
+
+def sqlite_bulk_insert_data(db_engine: Engine, table_name: str, datas: list, type_map: dict):
+    try:
+        metadata = MetaData()
+        metadata.reflect(bind=db_engine)
+        table = metadata.tables.get(table_name)
+        
+
+        if table is not None:
+            insert_datas = [{k: d[k] for k in table.columns.keys()} for d in datas]
+            insert_datas = [cast_row(d, type_map) for d in insert_datas]
+
+            with db_engine.connect() as conn:
+                with conn.begin():
+                    conn.execute(
+                        table.insert(),
+                        insert_datas
+                    )
+                print("[SUCCESS] Données insérées avec succès.")
+        else:
+            print(f"[ERREUR] Table '{table_name}' introuvable.")
+    
+        return True
+    except SQLAlchemyError as e:
+        print(f"[ERREUR] Erreur lors de l'insertion des données dans ' {table}: {e}")
+        return False

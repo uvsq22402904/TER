@@ -47,16 +47,16 @@ def neo(uri: str):
         print(f"[INFO] Début de la création des liens")
         
         # construction de liens direct entrte les noeuds (clé étrangère simple)
-        insert_simple_relation(table_summary_relation, metadata, driver_sql, session)
+        insert_simple_relation(table_summary_relation, driver_sql, session)
         # Creer des relations entre les noeuds
-        insert_many_to_many_relation(table_summary_relation, metadata, driver_sql, session)
+        insert_many_to_many_relation(table_summary_relation, driver_sql, session)
         
         print(f"[INFO] Fin de la création des liens")
         
                 
           
 
-def insert_simple_relation(table_summary_relation, metadata, driver, session_neo):
+def insert_simple_relation(table_summary_relation, driver, session_neo):
     for source_table, relations in table_summary_relation.items():
         # Filtrer les relations INNER uniquement
         inner_relations = {
@@ -93,7 +93,7 @@ def insert_simple_relation(table_summary_relation, metadata, driver, session_neo
             print(f"[SUCCESS] link created : {source_table} -----------> {target_table}")
          
 
-def insert_many_to_many_relation(table_summary_relation, metadata, driver, session_neo):
+def insert_many_to_many_relation(table_summary_relation, driver, session_neo):
     for source_table, relations in table_summary_relation.items():
         # Filtrer les relations INNER uniquement
         inner_relations = {

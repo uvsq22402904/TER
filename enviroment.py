@@ -4,4 +4,5 @@ URI_HOST_NEO4J = "localhost"
 USERNAME_NEO4J = "neo4j"
 PASSWORD_NEO4J = "password"
 DATABASE_URI_TEST = 'data/example.db'
+DATABASE_URI_OUPUT_TEST = 'data/output.db'
 DATABASE_TYPE = 'sqlite'

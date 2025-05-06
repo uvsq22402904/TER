@@ -2,9 +2,10 @@ from typing import Any, Dict
 from neo4j import Driver, GraphDatabase, ManagedTransaction,Session
 from neo4j.exceptions import Neo4jError
 from enviroment import URI_HOST_NEO4J,URI_PORT_NEO4J,USERNAME_NEO4J,PASSWORD_NEO4J,URI_AGENT_NEO4J
-from helper.db import get_all
+from .db import get_all
 import pandas as pd
 import json
+import re
 
 
 def is_noeud_exist(transacManager: ManagedTransaction, etiquette1: str, prop1: dict) -> bool:
@@ -194,3 +195,89 @@ def insert_noeud_from_table(table_name: str, table_struct, neo_session: Session,
     except Exception as e:
         print(f"[ERROR] Échec de l'import depuis {table_name} : {e}")
         return False
+
+def get_relations(neo_session: Session, label1: str, label2: str):
+    try:
+        query = f"MATCH (n:`{label1}`) - [r] -> (m:{label2}) RETURN r"
+        result = neo_session.run(query)
+        datas = [dict(record["r"]._properties) for record in result]
+        
+            
+        return datas
+
+    except Exception as e:
+        print(f"[ERROR] Échec de l'import des relation entre depuis {label1} et {label2}: {e}")
+        return pd.DataFrame()
+
+def clean_label(raw_label: str) -> str:
+    match = re.search(r"`(.+?)`", raw_label)
+    return match.group(1) if match else raw_label
+
+
+
+def get_all_etiquette(neo_session: Session):
+    """
+    Scans all labels in the Neo4j database and extracts property types from the `_types` field in each node.
+
+    Returns:
+        A dictionary like:
+        {
+            "employe": {
+                "id": "INTEGER",
+                "nom": "VARCHAR",
+                "date_embauche": "DATE"
+            },
+            ...
+        }
+    """
+    
+    try:
+        label_types: Dict[str, Dict[str, str]] = {}
+
+        # Step 1: Get all labels
+        result = neo_session.run("CALL db.labels() YIELD label RETURN label")
+        labels = [record["label"] for record in result]
+
+        # Step 2: For each label, sample one node and read _types
+        for label in labels:
+            query = f"MATCH (n:`{label}`) RETURN n._types AS types LIMIT 1"
+            result = neo_session.run(query)
+            record = result.single()
+
+            if record and record.get("types"):
+                type_entries = record["types"]
+                label_types[label] = {}
+
+                for entry in type_entries:
+                    if ":" in entry:
+                        key, type_str = entry.split(":", 1)
+                        label_types[label][key.strip()] = type_str.strip()
+        return label_types
+    except Exception as e:
+        print(f"[ERROR] Échec de la recuperation des etiquettes : {e}")
+        return False
+    
+
+def get_relation_matrice(labels: list[str], neo_session: Session):
+    try:
+
+            
+        return True
+    except Exception as e:
+        print(f"[ERROR] Échec de construction de la matrice : {e}")
+        return False
+    
+    
+def get_data_from_label(label: str, neo_session: Session):
+    try:
+        result = neo_session.run(f"MATCH (n: {label}) RETURN n;")
+        
+        datas = [dict(record["n"]._properties) for record in result]
+            
+        return datas
+    except Exception as e:
+        print(f"[ERROR] Échec de la recuperation des données depuis {label} : {e}")
+        return False
+    
+    
+    

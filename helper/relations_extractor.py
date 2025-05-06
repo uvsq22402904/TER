@@ -1,7 +1,10 @@
 from typing import TypedDict, Dict
 from .db import connector,getTables,isJoinTable,getRelationsMatrice
 import pandas as pd
+import numpy as np
 from .Draw import drawLineInConsole
+from neo4j import Session
+from .neo4j_db import get_relations
 
 """
     Transform database from sql to neo4j.
@@ -27,18 +30,14 @@ def db_relations(uri: str):
         matrixWithoutRelationTable = relationMatrix.drop(index = to_drops, columns=to_drops)
         
         print("Association table : ")
-        # drawLineInConsole(isAssociationTables)
+        drawLineInConsole(isAssociationTables)
         print("Relation matrix without association table : ")
-        # drawLineInConsole(matrixWithoutRelationTable)
+        drawLineInConsole(matrixWithoutRelationTable)
 
         return matrixWithoutRelationTable
     except Exception as e:
         print(f'ERROR: ', e)
         exit(1)
-
-
-from typing import Dict, TypedDict
-import pandas as pd
 
 class SummaryInfo(TypedDict):
     name: str
@@ -96,3 +95,12 @@ def summary_relation(relations_table: pd.DataFrame) -> Dict[str, Dict[str, Summa
         drawLineInConsole(pd.DataFrame(relation_data))
 
     return summary_rel
+
+
+
+def get_neo_matrice_relations(session: Session, tables: list[str]):
+    mat = [list(tables) for _ in tables]
+    
+    print(get_relations(session, "employe", "entreprise"))
+    
+    
