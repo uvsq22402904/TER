@@ -18,11 +18,9 @@ def m_sqlite(uri: str):
     # connexion a la bd neo4j
     driver_neo = load_neo()
     
-    
     with driver_neo.session() as session:
         # get all labels 
         labels_data = get_all_etiquette(session)
-        """
         
         print("[INFO] Début de la creation des tables")
         
@@ -48,18 +46,52 @@ def m_sqlite(uri: str):
           
         print("[INFO] Fin de l'insertion des données")
         
-        
         print("[INFO] Début de la creation des liens")
-        """
-        # get matice of relations
+        
+        # get matrice of relations
         matrice_relations = get_neo_matrice_relations(session, labels_data.keys())
-        """
-        for table, data in labels_data.items():
-            print(table)
-        # insert relation for each data
+        
+        # Create foreign key relationships based on the matrix
+        for source_table in matrice_relations.index:
+            for target_table in matrice_relations.columns:
+                if matrice_relations.loc[source_table, target_table] > 0:
+                    # Create foreign key relationship
+                    create_foreign_key(driver_sql, source_table, target_table)
+                    print(f"[SUCCESS] Created foreign key from {source_table} to {target_table}")
+        
         print("[INFO] Fin de la creation des liens")
-        """
         
-        
-def label_to_row(data:dict):
-    return {k: v for k, v in data.items() if k != "_types"}
+        return True
+
+def label_to_row(label_data):
+    """
+    Convert Neo4j node properties to a dictionary suitable for SQLite insertion.
+    Removes internal Neo4j properties and _types metadata.
+    """
+    row = label_data.copy()
+    # Remove internal Neo4j properties
+    if '_types' in row:
+        del row['_types']
+    return row
+
+def create_foreign_key(driver_sql, source_table, target_table):
+    """
+    Create a foreign key relationship between two tables.
+    """
+    try:
+        # Add a foreign key column to the source table
+        with driver_sql.connect() as conn:
+            conn.execute(f"""
+                ALTER TABLE {source_table}
+                ADD COLUMN {target_table}_id INTEGER
+            """)
+            
+            # Create the foreign key constraint
+            conn.execute(f"""
+                ALTER TABLE {source_table}
+                ADD CONSTRAINT fk_{source_table}_{target_table}
+                FOREIGN KEY ({target_table}_id)
+                REFERENCES {target_table}(id)
+            """)
+    except Exception as e:
+        print(f"[ERROR] Failed to create foreign key from {source_table} to {target_table}: {e}")
