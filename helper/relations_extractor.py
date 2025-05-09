@@ -96,11 +96,42 @@ def summary_relation(relations_table: pd.DataFrame) -> Dict[str, Dict[str, Summa
 
     return summary_rel
 
-
-
 def get_neo_matrice_relations(session: Session, tables: list[str]):
-    mat = [list(tables) for _ in tables]
+    """
+    Create a matrix of relationships between Neo4j labels.
     
-    print(get_relations(session, "employe", "entreprise"))
+    Args:
+        session (Session): Neo4j session
+        tables (list[str]): List of table names/labels
+        
+    Returns:
+        pd.DataFrame: Matrix showing relationships between tables with their types
+    """
+    try:
+        # Initialize empty matrix with dictionaries to store relationship info
+        matrix = pd.DataFrame({col: [{} for _ in tables] for col in tables}, index=tables)
+        
+        # For each pair of tables, check if there are relationships
+        for source_table in tables:
+            for target_table in tables:
+                if source_table != target_table:
+                    # Get relationships between these tables
+                    relations = get_relations(session, source_table, target_table)
+                    if relations and len(relations) > 0:
+                        # Store relationship information
+                        matrix.loc[source_table, target_table] = {
+                            'count': len(relations),
+                            'types': list(set(r.get('type', 'RELATES_TO') for r in relations)),
+                            'properties': list(set(
+                                prop for r in relations 
+                                for prop in r.keys() 
+                                if prop not in ['source_id', 'target_id', 'type']
+                            ))
+                        }
+        
+        return matrix
+    except Exception as e:
+        print(f"[ERROR] Failed to create relationship matrix: {e}")
+        return pd.DataFrame({col: [{} for _ in tables] for col in tables}, index=tables)
     
     
