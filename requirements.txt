@@ -1,4 +1,4 @@
 neo4j==5.28.1
 numpy==2.2.3
 pandas==2.2.3
-SQLAlchemy==2.0.3
+SQLAlchemy==2.0.39
