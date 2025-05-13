@@ -22,7 +22,7 @@ def get_table_structure(db_path, table_name):
 def load_table_data(db_path, table_name):   
     """ Charge les données d'une table sous forme de DataFrame """
     conn = sqlite3.connect(db_path)
-    df = pd.read_sql_query(f"SELECT * FROM {table_name}", conn)
+    df = pd.read_sql_query(f"SELECT * FROM {table_name} ORDER BY id", conn)
     conn.close()
     return df
 
@@ -65,17 +65,46 @@ def compare_tables(db1, db2):
         df1 = load_table_data(db1, table)
         df2 = load_table_data(db2, table)
 
-        if df1.equals(df2):
-            print("✔ Données identiques.")
-        else:
-            print("\n⚠ Données différentes :")
+        # S'assurer que les deux DataFrames ont les mêmes colonnes dans le même ordre
+        common_columns = sorted(set(df1.columns) & set(df2.columns))
+        df1 = df1[common_columns]
+        df2 = df2[common_columns]
+
+        # Réinitialiser l'index pour une comparaison plus précise
+        df1 = df1.reset_index(drop=True)
+        df2 = df2.reset_index(drop=True)
+
+        # Vérifier si les données sont identiques
+        try:
+            if df1.equals(df2):
+                print("✔ Données identiques.")
+            else:
+                print("\n⚠ Données différentes :")
+                print("-" * 60)
+                # Trouver les lignes qui diffèrent
+                mask = (df1 != df2).any(axis=1)
+                if mask.any():
+                    print("Lignes différentes :")
+                    print("\nBase 1:")
+                    print(df1[mask].to_string(index=False))
+                    print("\nBase 2:")
+                    print(df2[mask].to_string(index=False))
+                else:
+                    print("Les données sont identiques mais dans un ordre différent.")
+                print("-" * 60)
+        except Exception as e:
+            print("\n⚠ Erreur lors de la comparaison des données :")
             print("-" * 60)
-            diff = pd.concat([df1, df2]).drop_duplicates(keep=False)
-            print(diff.to_string(index=False))  # Affichage plus lisible des différences
+            print(f"Erreur : {str(e)}")
+            print("\nAperçu des données :")
+            print("\nBase 1:")
+            print(df1.head().to_string(index=False))
+            print("\nBase 2:")
+            print(df2.head().to_string(index=False))
             print("-" * 60)
 
 # Exemple d'utilisation
 db1_path = "data/example.db"
-db2_path = "Sortie.db"
+db2_path = "data/output.db"
 
 compare_tables(db1_path, db2_path)

@@ -1,7 +1,7 @@
 from typing import Dict, List, Tuple
 from sqlalchemy import Engine
 import pandas as pd
-from neo4j import GraphDatabase
+from neo4j import GraphDatabase, Session
 
 def extract_constraints(table_name: str, db_engine: Engine) -> Dict[str, List[Dict]]:
     """
@@ -23,23 +23,13 @@ def extract_constraints(table_name: str, db_engine: Engine) -> Dict[str, List[Di
         'default': [],
         'collate': [],
         'autoincrement': [],
-        'indexes': [],
-        'triggers': [],
-        'views': [],
-        'temporary': False,
-        'without_rowid': False
+        'indexes': []
     }
     
     # 1. Informations de base de la table
     table_info = pd.read_sql_query(f"PRAGMA table_info({table_name});", db_engine)
     
-    # 2. Informations sur la table elle-même
-    table_list = pd.read_sql_query("PRAGMA table_list;", db_engine)
-    table_details = table_list[table_list['name'] == table_name].iloc[0]
-    constraints['temporary'] = table_details['type'] == 'temp'
-    constraints['without_rowid'] = table_details['wr'] == 1
-    
-    # 3. Analyse détaillée de chaque colonne
+    # 2. Analyse détaillée de chaque colonne
     for _, row in table_info.iterrows():
         column_name = row['name']
         column_type = row['type'].upper()
@@ -80,8 +70,16 @@ def extract_constraints(table_name: str, db_engine: Engine) -> Dict[str, List[Di
                 'column': column_name,
                 'collation': collation
             })
+        
+        # CHECK (extrait des contraintes CHECK de la définition de la colonne)
+        if 'CHECK' in column_type:
+            check_condition = column_type.split('CHECK')[1].strip('()')
+            constraints['check'].append({
+                'column': column_name,
+                'condition': check_condition
+            })
     
-    # 4. Clés étrangères avec toutes leurs propriétés
+    # 3. Clés étrangères avec toutes leurs propriétés
     fk_info = pd.read_sql_query(f"PRAGMA foreign_key_list({table_name});", db_engine)
     for _, row in fk_info.iterrows():
         constraints['foreign_keys'].append({
@@ -94,7 +92,7 @@ def extract_constraints(table_name: str, db_engine: Engine) -> Dict[str, List[Di
             'seq': row['seq']
         })
     
-    # 5. Indexes (y compris les index implicites)
+    # 4. Indexes (y compris les index implicites)
     index_list = pd.read_sql_query(f"PRAGMA index_list({table_name});", db_engine)
     for _, index_row in index_list.iterrows():
         index_name = index_row['name']
@@ -116,45 +114,16 @@ def extract_constraints(table_name: str, db_engine: Engine) -> Dict[str, List[Di
             'partial': index_row['partial'] == 1
         })
     
-    # 6. Contraintes CHECK
-    check_info = pd.read_sql_query(f"PRAGMA check_constraints({table_name});", db_engine)
-    for _, row in check_info.iterrows():
-        constraints['check'].append({
-            'name': row['name'],
-            'condition': row['condition']
-        })
-    
-    # 7. Triggers associés à la table
-    trigger_info = pd.read_sql_query("PRAGMA trigger_list;", db_engine)
-    table_triggers = trigger_info[trigger_info['table'] == table_name]
-    for _, row in table_triggers.iterrows():
-        constraints['triggers'].append({
-            'name': row['name'],
-            'type': row['type'],  # BEFORE, AFTER, INSTEAD OF
-            'event': row['event'],  # DELETE, INSERT, UPDATE
-            'timing': row['timing']  # IMMEDIATE, DEFERRED
-        })
-    
-    # 8. Vues qui référencent cette table
-    view_info = pd.read_sql_query("PRAGMA view_list;", db_engine)
-    for _, row in view_info.iterrows():
-        view_def = pd.read_sql_query(f"PRAGMA view_info('{row['name']}');", db_engine)
-        if table_name in view_def['sql'].iloc[0]:
-            constraints['views'].append({
-                'name': row['name'],
-                'temporary': row['type'] == 'temp'
-            })
-    
     return constraints
 
-def apply_constraints_to_neo4j(constraints: Dict[str, List[Dict]], table_name: str, session: GraphDatabase.session) -> None:
+def apply_constraints_to_neo4j(constraints: Dict[str, List[Dict]], table_name: str, session: Session) -> None:
     """
     Applique les contraintes extraites aux nœuds Neo4j.
     
     Args:
         constraints (Dict[str, List[Dict]]): Dictionnaire des contraintes extraites
         table_name (str): Nom de la table/étiquette Neo4j
-        session (GraphDatabase.session): Session Neo4j
+        session (Session): Session Neo4j
     """
     # Créer les contraintes pour les clés primaires
     for pk in constraints['primary_keys']:
@@ -176,13 +145,14 @@ def apply_constraints_to_neo4j(constraints: Dict[str, List[Dict]], table_name: s
         """
         session.run(query)
         
-        # Contrainte de relation
-        query = f"""
-        CREATE CONSTRAINT {table_name}_rel_{fk['column']} IF NOT EXISTS
-        FOR ()-[r:RELATES_TO]-()
-        WHERE r.{fk['column']} IS NOT NULL
-        """
-        session.run(query)
+        # Contrainte de relation - uniquement si la relation n'est pas many-to-many
+        if not any(index['unique'] for index in constraints['indexes'] if fk['column'] in [col['name'] for col in index['columns']]):
+            query = f"""
+            CREATE CONSTRAINT {table_name}_rel_{fk['column']} IF NOT EXISTS
+            FOR ()-[r:RELATES_TO]-()
+            WHERE r.{fk['column']} IS NOT NULL
+            """
+            session.run(query)
     
     # Créer les contraintes pour les colonnes NOT NULL
     for nn in constraints['not_null']:
