@@ -132,8 +132,9 @@ def insert_many_to_many_relations(relations_dict, driver_sql, session_neo):
     for source_table, relations in relations_dict.items():
         for target_table, relation_info in relations.items():
             if relation_info["type"] == "join":
-                # Utiliser le nom de la relation comme nom de la table d'association
-                assoc_table = relation_info["name"]
+                # Créer le nom de la table d'association (toujours dans le même ordre pour éviter la duplication)
+                tables = sorted([source_table, target_table])
+                assoc_table = f"{tables[0]}_{tables[1]}_association"
                 
                 # Si la relation a déjà été traitée, on passe à la suivante
                 if assoc_table in processed_relations:
@@ -149,16 +150,22 @@ def insert_many_to_many_relations(relations_dict, driver_sql, session_neo):
                 
                 try:
                     with driver_sql.connect() as conn:
-                        # Créer la table d'association avec le nom spécifique de la relation
-                        create_table(assoc_table, {
-                            f"{source_table}_id": "INTEGER",
-                            f"{target_table}_id": "INTEGER"
-                        }, driver_sql)
+                        # Créer la table d'association avec toutes les contraintes dès le début
+                        create_table_query = f"""
+                        CREATE TABLE IF NOT EXISTS {assoc_table} (
+                            {source_table}_id INTEGER NOT NULL,
+                            {target_table}_id INTEGER NOT NULL,
+                            PRIMARY KEY ({source_table}_id, {target_table}_id),
+                            FOREIGN KEY ({source_table}_id) REFERENCES {source_table}(id) ON DELETE CASCADE,
+                            FOREIGN KEY ({target_table}_id) REFERENCES {target_table}(id) ON DELETE CASCADE
+                        )
+                        """
+                        conn.execute(text(create_table_query))
                         
-                        # Récupérer les données de la relation
+                        # Récupérer les données de la relation avec leurs propriétés
                         query = f"""
                         MATCH (s:{source_table})-[r:{relation_info['name']}]->(t:{target_table})
-                        RETURN s, t
+                        RETURN s, t, r
                         """
                         result = session_neo.run(query)
                         
@@ -166,15 +173,33 @@ def insert_many_to_many_relations(relations_dict, driver_sql, session_neo):
                         for record in result:
                             source_node = record['s']
                             target_node = record['t']
+                            relation_props = record['r']
                             
+                            # Préparer les colonnes et valeurs pour l'insertion
+                            columns = [f"{source_table}_id", f"{target_table}_id"]
+                            values = [source_node['id'], target_node['id']]
+                            
+                            # Ajouter les propriétés de la relation si elles existent
+                            if relation_props:
+                                for prop_name, prop_value in relation_props.items():
+                                    if prop_name not in ['id']:  # Éviter les conflits avec les IDs
+                                        # Ajouter la colonne si elle n'existe pas déjà
+                                        if prop_name not in columns:
+                                            alter_query = f"ALTER TABLE {assoc_table} ADD COLUMN {prop_name} TEXT"
+                                            conn.execute(text(alter_query))
+                                            columns.append(prop_name)
+                                        values.append(prop_value)
+                            
+                            # Construire et exécuter la requête d'insertion
+                            placeholders = ', '.join([':' + col for col in columns])
                             insert_query = text(f"""
-                            INSERT INTO {assoc_table} ({source_table}_id, {target_table}_id)
-                            VALUES (:source_id, :target_id)
+                            INSERT INTO {assoc_table} ({', '.join(columns)})
+                            VALUES ({placeholders})
                             """)
-                            conn.execute(insert_query, {
-                                "source_id": source_node['id'],
-                                "target_id": target_node['id']
-                            })
+                            
+                            # Créer le dictionnaire de paramètres
+                            params = dict(zip(columns, values))
+                            conn.execute(insert_query, params)
                         
                         print(f"[SUCCESS] Relation many-to-many créée : {source_table} <----> {target_table} (table: {assoc_table})")
                 except Exception as e:

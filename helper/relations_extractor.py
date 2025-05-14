@@ -96,11 +96,75 @@ def summary_relation(relations_table: pd.DataFrame) -> Dict[str, Dict[str, Summa
 
     return summary_rel
 
-
-
 def get_neo_matrice_relations(session: Session, tables: list[str]):
-    mat = [list(tables) for _ in tables]
+    """
+    Construit une matrice des relations entre les tables à partir de Neo4j.
     
-    print(get_relations(session, "employe", "entreprise"))
+    Args:
+        session (Session): Session Neo4j active
+        tables (list[str]): Liste des noms de tables
+        
+    Returns:
+        Dict[str, Dict[str, dict]]: Dictionnaire des relations entre les tables
+    """
+    try:
+        relations_dict = {}
+        
+        # Pour chaque paire de tables possible
+        for source_table in tables:
+            relations_dict[source_table] = {}
+            
+            for target_table in tables:
+                if source_table == target_table:
+                    continue
+                    
+                # Vérifier les relations dans les deux sens
+                forward_query = f"""
+                MATCH (s:{source_table})-[r]->(t:{target_table})
+                RETURN type(r) as relation_type, count(r) as count
+                """
+                forward_result = session.run(forward_query)
+                forward_record = forward_result.single()
+                
+                backward_query = f"""
+                MATCH (s:{target_table})-[r]->(t:{source_table})
+                RETURN type(r) as relation_type, count(r) as count
+                """
+                backward_result = session.run(backward_query)
+                backward_record = backward_result.single()
+                
+                # Afficher les relations trouvées pour le débogage
+                if forward_record and forward_record['count'] > 0:
+                    print(f"[DEBUG] Relation trouvée {source_table} -> {target_table}: {forward_record['relation_type']} ({forward_record['count']} relations)")
+                if backward_record and backward_record['count'] > 0:
+                    print(f"[DEBUG] Relation trouvée {target_table} -> {source_table}: {backward_record['relation_type']} ({backward_record['count']} relations)")
+                
+                # Si des relations existent dans les deux sens, c'est une relation many-to-many
+                if (forward_record and forward_record['count'] > 0) and (backward_record and backward_record['count'] > 0):
+                    # Utiliser le type de relation réel de Neo4j
+                    relation_type = forward_record['relation_type']
+                    relations_dict[source_table][target_table] = {
+                        "name": relation_type,  # Utiliser le type de relation réel
+                        "type": "join"
+                    }
+                # Si une relation existe dans un seul sens, c'est une relation one-to-many
+                elif forward_record and forward_record['count'] > 0:
+                    relation_type = forward_record['relation_type']
+                    relations_dict[source_table][target_table] = {
+                        "name": relation_type,
+                        "type": "inner"
+                    }
+                elif backward_record and backward_record['count'] > 0:
+                    relation_type = backward_record['relation_type']
+                    relations_dict[target_table][source_table] = {
+                        "name": relation_type,
+                        "type": "inner"
+                    }
+        
+        return relations_dict
+            
+    except Exception as e:
+        print(f"[ERROR] Échec de construction de la matrice : {e}")
+        return None
     
     
