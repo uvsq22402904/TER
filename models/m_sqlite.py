@@ -1,7 +1,6 @@
 from helper.neo4j_db import load_neo, get_all_etiquette, get_data_from_label
 from helper.db import connector, create_table, bulk_insert_data
 from helper.relations_extractor import get_neo_matrice_relations
-from helper.constraints_extractor import extract_constraints, apply_constraints_to_neo4j
 from sqlalchemy import text
 
 """
