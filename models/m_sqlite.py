@@ -150,57 +150,75 @@ def insert_many_to_many_relations(relations_dict, driver_sql, session_neo):
                 
                 try:
                     with driver_sql.connect() as conn:
-                        # Créer la table d'association avec toutes les contraintes dès le début
-                        create_table_query = f"""
-                        CREATE TABLE IF NOT EXISTS {assoc_table} (
-                            {source_table}_id INTEGER NOT NULL,
-                            {target_table}_id INTEGER NOT NULL,
-                            PRIMARY KEY ({source_table}_id, {target_table}_id),
-                            FOREIGN KEY ({source_table}_id) REFERENCES {source_table}(id) ON DELETE CASCADE,
-                            FOREIGN KEY ({target_table}_id) REFERENCES {target_table}(id) ON DELETE CASCADE
-                        )
-                        """
-                        conn.execute(text(create_table_query))
+                        # Démarrer une transaction explicite
+                        trans = conn.begin()
                         
-                        # Récupérer les données de la relation avec leurs propriétés
-                        query = f"""
-                        MATCH (s:{source_table})-[r:{relation_info['name']}]->(t:{target_table})
-                        RETURN s, t, r
-                        """
-                        result = session_neo.run(query)
-                        
-                        # Insérer les relations dans la table d'association
-                        for record in result:
-                            source_node = record['s']
-                            target_node = record['t']
-                            relation_props = record['r']
+                        try:
+                            # Créer la table d'association avec toutes les contraintes dès le début
+                            create_table_query = f"""
+                            CREATE TABLE IF NOT EXISTS {assoc_table} (
+                                {source_table}_id INTEGER NOT NULL,
+                                {target_table}_id INTEGER NOT NULL,
+                                PRIMARY KEY ({source_table}_id, {target_table}_id),
+                                FOREIGN KEY ({source_table}_id) REFERENCES {source_table}(id) ON DELETE CASCADE,
+                                FOREIGN KEY ({target_table}_id) REFERENCES {target_table}(id) ON DELETE CASCADE
+                            )
+                            """
+                            conn.execute(text(create_table_query))
                             
-                            # Préparer les colonnes et valeurs pour l'insertion
-                            columns = [f"{source_table}_id", f"{target_table}_id"]
-                            values = [source_node['id'], target_node['id']]
+                            # Récupérer les données de la relation avec leurs propriétés
+                            query = f"""
+                            MATCH (s:{source_table})-[r:{relation_info['name']}]->(t:{target_table})
+                            RETURN s, t, r
+                            """
+                            print(f"[DEBUG] Exécution de la requête Neo4j: {query}")
+                            result = session_neo.run(query)
                             
-                            # Ajouter les propriétés de la relation si elles existent
-                            if relation_props:
-                                for prop_name, prop_value in relation_props.items():
-                                    if prop_name not in ['id']:  # Éviter les conflits avec les IDs
-                                        # Ajouter la colonne si elle n'existe pas déjà
-                                        if prop_name not in columns:
-                                            alter_query = f"ALTER TABLE {assoc_table} ADD COLUMN {prop_name} TEXT"
-                                            conn.execute(text(alter_query))
-                                            columns.append(prop_name)
-                                        values.append(prop_value)
+                            # Compter le nombre de relations trouvées
+                            count = 0
+                            for record in result:
+                                count += 1
+                                source_node = record['s']
+                                target_node = record['t']
+                                relation_props = record['r']
+                                
+                                print(f"[DEBUG] Relation trouvée: {source_table}(id={source_node['id']}) -> {target_table}(id={target_node['id']})")
+                                
+                                # Préparer les colonnes et valeurs pour l'insertion
+                                columns = [f"{source_table}_id", f"{target_table}_id"]
+                                values = [source_node['id'], target_node['id']]
+                                
+                                # Ajouter les propriétés de la relation si elles existent
+                                if relation_props:
+                                    for prop_name, prop_value in relation_props.items():
+                                        if prop_name not in ['id']:  # Éviter les conflits avec les IDs
+                                            # Ajouter la colonne si elle n'existe pas déjà
+                                            if prop_name not in columns:
+                                                alter_query = f"ALTER TABLE {assoc_table} ADD COLUMN {prop_name} TEXT"
+                                                conn.execute(text(alter_query))
+                                                columns.append(prop_name)
+                                            values.append(prop_value)
+                                
+                                # Construire et exécuter la requête d'insertion
+                                placeholders = ', '.join([':' + col for col in columns])
+                                insert_query = text(f"""
+                                INSERT INTO {assoc_table} ({', '.join(columns)})
+                                VALUES ({placeholders})
+                                """)
+                                
+                                # Créer le dictionnaire de paramètres
+                                params = dict(zip(columns, values))
+                                conn.execute(insert_query, params)
                             
-                            # Construire et exécuter la requête d'insertion
-                            placeholders = ', '.join([':' + col for col in columns])
-                            insert_query = text(f"""
-                            INSERT INTO {assoc_table} ({', '.join(columns)})
-                            VALUES ({placeholders})
-                            """)
+                            # Valider la transaction
+                            trans.commit()
+                            print(f"[DEBUG] Nombre total de relations insérées: {count}")
+                            print(f"[SUCCESS] Relation many-to-many créée : {source_table} <----> {target_table} (table: {assoc_table})")
                             
-                            # Créer le dictionnaire de paramètres
-                            params = dict(zip(columns, values))
-                            conn.execute(insert_query, params)
-                        
-                        print(f"[SUCCESS] Relation many-to-many créée : {source_table} <----> {target_table} (table: {assoc_table})")
+                        except Exception as e:
+                            # En cas d'erreur, annuler la transaction
+                            trans.rollback()
+                            raise e
+                            
                 except Exception as e:
                     print(f"[ERREUR] Erreur lors de la creation de la table {assoc_table} : {e}")
