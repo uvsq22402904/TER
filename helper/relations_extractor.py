@@ -99,8 +99,21 @@ def summary_relation(relations_table: pd.DataFrame) -> Dict[str, Dict[str, Summa
 
 
 def get_neo_matrice_relations(session: Session, tables: list[str]):
-    mat = [list(tables) for _ in tables]
+    mat_relations = list()
     
-    print(get_relations(session, "employe", "entreprise"))
+    for start in tables:
+        for end in tables:
+            if start != end:
+                r = get_relations(session, start, end)
+                mat_relations.appends(
+                    {
+                        "from": start,
+                        "to": end,
+                        "relations": r
+                    }
+                )
+    
+                
+    
     
     

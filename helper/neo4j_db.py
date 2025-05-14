@@ -198,9 +198,22 @@ def insert_noeud_from_table(table_name: str, table_struct, neo_session: Session,
 
 def get_relations(neo_session: Session, label1: str, label2: str):
     try:
-        query = f"MATCH (n:`{label1}`) - [r] -> (m:{label2}) RETURN r"
+        query = f"""
+            MATCH (n:{label1}) - [r] -> (m:{label2})
+            WITH n, m, collect(r)[0] AS uniqueRel
+            RETURN uniqueRel;
+        """
+        
         result = neo_session.run(query)
-        datas = [dict(record["r"]._properties) for record in result]
+        datas = [
+            {
+                "type": record["uniqueRel"].type,
+                "properties": record["uniqueRel"]._properties,
+            }
+            for record in result
+        ]
+        
+        datas = list({item['type']: item for item in datas}.values())
         
             
         return datas
